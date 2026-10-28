@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lakehouse cluster sizing</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f5f3f9;--panel:#fff;--ink:#1d1630;--mut:#62597a;--line:#e4e0ec;--acc:#3d145f;--accink:#fff;--tint:#f1ebf8;--hero:#2b0d47;--gold:#f2b84b;--ok:#17805a;--warn:#a54f08;--warnbg:#fdeede;--yel:#fff9cf;--sh:0 1px 2px rgba(40,20,70,.06),0 6px 18px rgba(40,20,70,.06)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#130e1d;--panel:#1d1630;--ink:#ece8f6;--mut:#a99fc2;--line:#33284a;--acc:#c3a8f0;--accink:#1d1630;--tint:#2a2040;--hero:#241338;--ok:#4cc790;--warn:#f0a35a;--warnbg:#3b2815;--yel:#3a3314;--sh:none}}
+:root[data-theme="dark"]{--bg:#130e1d;--panel:#1d1630;--ink:#ece8f6;--mut:#a99fc2;--line:#33284a;--acc:#c3a8f0;--accink:#1d1630;--tint:#2a2040;--hero:#241338;--ok:#4cc790;--warn:#f0a35a;--warnbg:#3b2815;--yel:#3a3314;--sh:none}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 "Segoe UI",Roboto,"Helvetica Neue",Arial,system-ui,sans-serif}
+.wrap{max-width:84rem;margin:0 auto;padding:0 1rem}main{padding-bottom:3rem}
+.hero{background:var(--hero);color:#fff;padding:1.4rem 0 1.6rem;border-bottom:4px solid var(--gold)}
+.brand{font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--gold)}
+.hero h1{font-size:clamp(1.7rem,4.5vw,2.6rem);line-height:1.15;margin:.35rem 0 .4rem;font-weight:700;letter-spacing:-.01em}
+.hero p{margin:0;max-width:44rem;color:#d9cfea;font-size:1.05rem}
+.hrow{display:flex;flex-wrap:wrap;gap:.75rem 1.25rem;align-items:flex-end;margin-top:1.1rem}
+.hrow label{display:grid;gap:.2rem;font-size:.8rem;font-weight:600;color:#d9cfea}.hrow input{min-width:16rem;border:1px solid #6d4a96;background:rgba(255,255,255,.1);color:#fff;border-radius:.5rem;padding:.5rem .7rem}.hrow input::placeholder{color:#b6a6d1}
+.steps{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;margin:1.1rem 0 0;padding:0;list-style:none;font-size:.9rem;color:#d9cfea}.steps b{display:inline-grid;place-items:center;width:1.4rem;height:1.4rem;border-radius:50%;background:var(--gold);color:#2b0d47;margin-right:.4rem;font-size:.8rem}
+button,input,select{font:inherit;color:inherit}:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.btn{border:1px solid var(--acc);background:var(--panel);border-radius:.5rem;padding:.5rem 1rem;cursor:pointer;font-weight:600}.btn.pri{background:var(--gold);border-color:var(--gold);color:#2b0d47}.btn:disabled{opacity:.6}
+#msg{font-size:.85rem;color:#d9cfea}
+.layout{display:grid;gap:1.25rem;grid-template-columns:1fr;margin-top:1.25rem}@media(min-width:62rem){.layout{grid-template-columns:25rem 1fr;align-items:start}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:.9rem;padding:1.1rem;margin-bottom:1rem;box-shadow:var(--sh)}
+h2{font-size:1.05rem;margin:0 0 .7rem;color:var(--acc)}.mut{color:var(--mut)}
+.seg{display:flex;flex-wrap:wrap;gap:.35rem;margin:.25rem 0 .7rem}.seg button{border:1px solid var(--line);background:transparent;border-radius:999px;padding:.3rem .9rem;cursor:pointer;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--acc);color:var(--accink);border-color:var(--acc)}.lab{font-weight:700;font-size:.8rem;color:var(--mut);text-transform:uppercase;letter-spacing:.05em}.note{font-size:.85rem;color:var(--mut);margin:0}
+.grid{display:grid;gap:.75rem}.grp{margin-bottom:1rem}.grp h3{margin:0;font-size:.95rem}.grp .note{margin:.1rem 0 .6rem}.guide ol{margin:.6rem 0;padding-left:1.2rem}.guide li{margin:.3rem 0}.guide>summary{font-size:1.05rem;color:var(--acc)}dl{margin:.6rem 0 0}dt{font-weight:700;margin-top:.5rem}dd{margin:0;color:var(--mut)}.err{color:var(--warn);font-weight:600}.f input[aria-invalid="true"]{border-color:var(--warn);box-shadow:0 0 0 1px var(--warn)}.f{display:grid;gap:.25rem}.top{display:flex;align-items:center;gap:.4rem}.lb{font-size:.9rem;font-weight:600}
+.ctl{display:flex;align-items:center;gap:.4rem}.ctl em{font-style:normal;color:var(--mut);font-size:.8rem}
+.f input,.f select{width:100%;max-width:11rem;border:1px solid var(--line);background:var(--panel);border-radius:.45rem;padding:.35rem .55rem}
+#assume .f input{background:var(--yel);color:#1d1630}.f.chg input,.f.chg select{border-color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+details{border-top:1px solid var(--line);padding:.55rem 0}summary{cursor:pointer;font-weight:700}details .grid{margin-top:.7rem}
+.i{position:relative;display:inline-grid;place-items:center;flex:none;width:1.1rem;height:1.1rem;border-radius:50%;border:1.5px solid var(--acc);color:var(--acc);font:italic 700 .72rem Georgia,serif;cursor:help}
+.i::after{content:attr(data-tip);position:absolute;z-index:20;left:-.4rem;top:1.5rem;width:16.5rem;padding:.55rem .7rem;border-radius:.5rem;background:#241338;color:#f4eefc;font:400 .8rem/1.4 "Segoe UI",Roboto,Arial,sans-serif;font-style:normal;text-align:left;box-shadow:0 6px 20px rgba(0,0,0,.3);display:none;white-space:normal}
+.i:hover::after,.i:focus::after{display:block}.card .i::after{left:auto;right:-.4rem}
+#rec{font-size:1.15rem;font-weight:600;line-height:1.45;margin:.2rem 0 .3rem}#scopeLine{margin:0 0 1rem;color:var(--mut);font-weight:600}
+.cards{display:grid;gap:.7rem;grid-template-columns:repeat(auto-fit,minmax(9.5rem,1fr));margin-bottom:1rem}
+.card{background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:.8rem;padding:.75rem .95rem;display:grid;gap:.1rem;box-shadow:var(--sh)}
+.card span{font-weight:600;color:var(--mut);font-size:.85rem}.card b{font-size:1.85rem;line-height:1.15;font-variant-numeric:tabular-nums;color:var(--acc)}.card small{color:var(--mut);font-size:.78rem}
+.sc{overflow-x:auto}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{padding:.45rem .6rem;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{font-size:.8rem;color:var(--mut)}
+.n{text-align:right}.tot{font-weight:700;background:var(--tint)}tr.sub td{font-weight:700;background:var(--tint)}
+.spec{display:grid;gap:.4rem}.spec div{display:flex;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--line);padding:.3rem 0;flex-wrap:wrap}.spec span{color:var(--mut)}
+ul{list-style:none;margin:0;padding:0;display:grid;gap:.3rem}li i{display:inline-block;width:1.4rem;font-style:normal;font-weight:700}li.ok i{color:var(--ok)}li.warn{background:var(--warnbg);border-radius:.4rem;padding:.25rem .5rem}li.warn i{color:var(--warn)}
+footer{margin-top:1rem;padding-top:1rem;border-top:1px solid var(--line);color:var(--mut);font-size:.82rem}
+
+.nav{position:sticky;top:0;z-index:30;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:var(--sh)}
+.nav .wrap{display:flex;gap:.25rem;overflow-x:auto;padding-top:.4rem}
+.nav button{border:0;border-bottom:3px solid transparent;background:none;padding:.65rem 1rem;font-weight:700;color:var(--mut);cursor:pointer;white-space:nowrap}
+.nav button[aria-selected="true"]{color:var(--acc);border-bottom-color:var(--gold)}.nav button:hover{color:var(--acc)}
+.scopebar{background:var(--tint);border-bottom:1px solid var(--line)}.scopebar .wrap{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;align-items:center;padding-top:.6rem;padding-bottom:.6rem}
+.scopebar .seg{margin:0}.scopebar .lab{margin-right:.4rem}.sg{display:flex;align-items:center;flex-wrap:wrap;gap:.2rem}
+.pg{margin-top:1.25rem}.pg>h2.pt{font-size:1.35rem;margin:0 0 .2rem}.pg>.sub{margin:0 0 1rem;color:var(--mut)}
+.grid3{display:grid;gap:.9rem 1.25rem;grid-template-columns:repeat(auto-fill,minmax(17rem,1fr))}
+.two{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(18rem,1fr))}
+.basis{white-space:normal!important;color:var(--mut);min-width:14rem;font-size:.85rem}
+.code{font-size:.7rem;color:var(--mut);border:1px solid var(--line);border-radius:.3rem;padding:0 .3rem}.pn{display:flex;justify-content:space-between;gap:.5rem;margin:1.25rem 0 0}
+</style></head><body>
+<header class="hero"><div class="wrap"><div class="brand">Translab Technologies</div><h1>Data Lakehouse Cluster Sizing</h1>
+<p>Enter the client inputs, review the assumptions, and see the storage, compute and bill of materials we recommend. Use the tabs below to move between pages.</p>
+<div class="hrow"><label>Prepared for<input id="client" type="text" placeholder="Your organisation name" autocomplete="off"></label><button class="btn pri" id="dl">Download Excel</button><span id="msg" role="status"></span></div></div></header>
+<nav class="nav" aria-label="Pages"><div class="wrap" role="tablist">
+<button role="tab" data-page="inputs">Inputs</button><button role="tab" data-page="assumptions">Assumptions</button><button role="tab" data-page="storage">Storage</button><button role="tab" data-page="compute">Compute</button><button role="tab" data-page="review">Review</button><button role="tab" data-page="bom">BoM</button></div></nav>
+<div class="scopebar"><div class="wrap">
+<div class="sg"><span class="lab">Environment</span><div class="seg" role="group" aria-label="Environment"><button data-kind="env" data-scope="P">Production</button><button data-kind="env" data-scope="U">UAT</button><button data-kind="env" data-scope="D">Development</button><button data-kind="env" data-scope="all">All environments</button></div></div>
+<div class="sg"><span class="lab">Cluster</span><div class="seg" role="group" aria-label="Cluster type"><button data-kind="svc" data-scope="0">Base cluster</button><button data-kind="svc" data-scope="1">Base cluster + data services</button></div></div>
+<span class="note" id="svcNote" style="flex:1 1 18rem"></span></div></div>
+<main class="wrap">
+<section class="pg" id="pg-inputs"><h2 class="pt">Inputs</h2><p class="sub">The client enters these nine figures. Everything else is calculated.</p>
+<details class="panel guide" open><summary>How this page works</summary><ol><li><b>Inputs.</b> Enter the client's figures here. Hover over the <i class="i" aria-hidden="true">i</i> icon next to any item to see what it means.</li><li><b>Assumptions.</b> Translab's planning values. Change them only if you have a reason to.</li><li><b>Storage and Compute.</b> See how the storage and the servers are worked out, step by step.</li><li><b>Review.</b> The recommendation in one place, with design checks.</li><li><b>BoM.</b> The bill of materials by environment. Press <b>Download Excel</b> at any time for the full workbook with live formulas.</li></ol>
+<details><summary>What do the technical terms mean?</summary><dl id="gloss"></dl></details></details>
+<section class="panel"><h2>Client inputs</h2><div id="inputs" class="two"></div></section>
+<section class="panel"><h2>Optional: fix the sizing</h2><p class="note">Leave 0 to use the calculated value. Enter a number to fix the Production Spark pool or the physical servers of an environment.</p><div class="grid3" id="ovr" style="margin-top:.75rem"></div></section>
+<div class="pn"><span></span><button class="btn" data-go="assumptions">Next: Assumptions &rarr;</button></div></section>
+<section class="pg" id="pg-assumptions" hidden><h2 class="pt">Assumptions</h2><p class="sub">Planning values prepared by Translab. Everything recalculates when you change one. Edited values are outlined.</p><div id="assume"></div><p><button class="btn" id="reset">Reset all to defaults</button></p>
+<div class="pn"><button class="btn" data-go="inputs">&larr; Inputs</button><button class="btn" data-go="storage">Next: Storage &rarr;</button></div></section>
+<section class="pg" id="pg-storage" hidden><h2 class="pt">Storage</h2><p class="sub">How much storage the data needs. Usable storage is the space the data occupies. Raw storage is the disk capacity to buy after data protection and free space.</p><div id="storageBody"></div>
+<div class="pn"><button class="btn" data-go="assumptions">&larr; Assumptions</button><button class="btn" data-go="compute">Next: Compute &rarr;</button></div></section>
+<section class="pg" id="pg-compute" hidden><h2 class="pt">Compute</h2><p class="sub">How the processing, live-feed, database and network needs of Production are worked out. The BoM page scales these for DR, UAT and Development.</p><p class="note" id="ovnote2"></p><div id="computeBody"></div>
+<div class="pn"><button class="btn" data-go="storage">&larr; Storage</button><button class="btn" data-go="review">Next: Review &rarr;</button></div></section>
+<section class="pg" id="pg-review" hidden><h2 class="pt">Review</h2><p class="sub">Our recommendation for the selected scope.</p>
+<section class="panel"><p id="rec"></p><p id="scopeLine"></p><div class="cards" id="cards"></div></section>
+<div class="two"><section class="panel"><h2>Servers by environment</h2><p class="note">Virtual machines (VMs) are software servers. They run on the physical servers at the bottom of the table.</p><div id="compute"></div><p class="note" id="ovnote" style="margin-top:.5rem"></p></section>
+<section class="panel"><h2>Storage by environment</h2><p class="note">Usable storage is the space your data occupies. Raw storage is what to buy.</p><div id="storage"></div></section></div>
+<div class="two"><section class="panel"><h2>Platform and network</h2><p class="note">Details for your hardware and network teams.</p><div class="spec" id="spec"></div></section>
+<section class="panel"><h2>Design checks</h2><p class="note">Automatic tests of the design. A tick means it passes. An exclamation mark means the design needs review.</p><ul id="checks"></ul></section></div>
+<div class="pn"><button class="btn" data-go="compute">&larr; Compute</button><button class="btn" data-go="bom">Next: BoM &rarr;</button></div></section>
+<section class="pg" id="pg-bom" hidden><h2 class="pt">Bill of materials</h2><p class="sub">Virtual machines, physical servers and storage hardware for each selected environment.</p><div id="bomBody"></div>
+<p><button class="btn pri" id="dl2">Download Excel</button></p>
+<div class="pn"><button class="btn" data-go="review">&larr; Review</button><span></span></div></section>
+<footer>Prepared by Translab Technologies.</footer>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script>
+/*MODEL*/
+const ENV=[['P','Prod'],['R','DR'],['U','UAT'],['D','Dev']];
+const rows=[],ROWS={};let cs,cc;
+const sh=n=>{cs=n};
+const sec=(t,cols)=>{cc=cols||[['C','']];rows.push({sec:1,sheet:cs,title:t,cols:cc})};
+const add=(kind,id,label,unit,f,note,n)=>{const r={kind,id,label,unit,note,n:n||'d1',sheet:cs,keys:cc.map(c=>c[0])};
+  if(kind==='calc')r.f=f;else r.val=f;rows.push(r);ROWS[id]=r};
+const inp=(...a)=>add('in',...a),asm=(...a)=>add('as',...a),calc=(...a)=>add('calc',...a);
+const envs=(p,t)=>[p,t,t,t];
+sh('Inputs');
+sec('Client inputs (provided by the client)');
+inp('I01','Source data estate, allocated size','TB',150,'Allocated size of the source databases, including indexes, undo, temp and free space','i');
+inp('I02','Daily ingestion volume, gross','TB/day',5,'Volume the pipelines move each day, not net-new data','d1');
+inp('I03','Annual data growth rate','%/yr',0.3,'Compounding','p');
+inp('HOR','Planning horizon (sizing year)','years',3,'Capacity and hardware are sized for the end of this year','i');
+inp('I09','Platform and reporting users','users',4000,'All users who consume reports or dashboards','i');
+inp('DUS','Users who query the lake directly','users',50,'Analysts and BI users running their own queries','i');
+inp('I11','Scheduled reports in the estate','reports',3000,'Batch or regulatory reports run each day','i');
+inp('STR','Real-time (streaming) ingestion needed','1 = yes, 0 = no',1,'Set 0 for batch-only clients: removes Kafka and streaming workers','i');
+inp('DR','Disaster recovery site required','1 = yes, 0 = no',1,'DR mirrors Production','i');
+sec('Optional: fix the sizing (0 = use the calculated value)');
+inp('OSV','Spark pool VMs, Production','VMs',0,'','i');
+inp('OHP','Physical hosts, Production','hosts',0,'','i');
+inp('OHR','Physical hosts, DR','hosts',0,'','i');
+inp('OHU','Physical hosts, UAT','hosts',0,'','i');
+inp('OHD','Physical hosts, Development','hosts',0,'','i');
+sec('Scope (set on the web page)');
+inp('SP','Production in scope','1 = yes, 0 = no',1,'','i');inp('SU','UAT in scope','1 = yes, 0 = no',1,'','i');
+inp('SD','Development in scope','1 = yes, 0 = no',1,'','i');
+inp('SVC','Data services included','1 = yes, 0 = no',1,'1 adds the platform services pool and both PostgreSQL pairs to the base cluster','i');
+sec('In-scope flag by environment',ENV);
+calc('ENVF','Environment counted in totals','1/0',['{SP}','{SP}*{DR}','{SU}','{SD}'],'DR is counted only with Production','i');
+sh('Assumptions');
+sec('Storage: how big the data becomes');
+asm('A01','Usable data as share of allocated source size','%',0.6,'Allocated space carries indexes, undo, temp and free space','p');
+asm('A02','Compression, source row data to Parquet (ZSTD)','x',3,'3x to 5x typical; 3x is conservative','d1');
+asm('A04','Landing zone compression','x',4,'Text formats compress 4x to 8x','d1');
+asm('A05','Landing zone retention','days',30,'Raw files kept for replay','i');
+asm('A06','Silver as share of Bronze','%',0.75,'Bronze : Silver : Gold = 1 : 0.75 : 0.25','p');
+asm('A07','Gold as share of Bronze','%',0.25,'','p');
+asm('A08','Snapshot and time-travel overhead','%',0.15,'Iceberg snapshots kept for audit and rollback','p');
+asm('A09','Streaming share of daily volume','%',0.2,'Applies only when real-time ingestion is needed','p');
+asm('A10','Kafka retention','days',7,'Replay across a weekend outage','i');
+asm('A11','Kafka replication factor','x',3,'Durability across three brokers','i');
+asm('A12','Kafka message compression','x',2,'LZ4 or ZSTD on change events','d1');
+asm('A13','Migrated history older than 3 years (warm)','%',0.3,'Only migrated data is old enough to tier','p');
+asm('A14','Migrated history older than 5 years (cold)','%',0.2,'','p');
+asm('A15','UAT storage as share of Production','%',0.2,'Sampled, masked data','p');
+asm('A16','Dev storage as share of Production','%',0.2,'','p');
+asm('A17','Object versioning and backup overhead','%',0.1,'','p');
+asm('A19','NVMe tier protection, raw to usable','x',1.3,'Replace with the vendor sizing-tool figure','d2');
+asm('A19b','NL-SAS tier protection, raw to usable','x',1.4,'Replace with the vendor figure','d2');
+asm('A20','Free-space reserve on each tier','%',0.2,'Appliances perform best below about 80% full','p');
+asm('A21','NVMe drive capacity','TB',7.68,'Indicative drive count only','d2');
+asm('A22','NL-SAS drive capacity','TB',20,'Indicative drive count only','d1');
+sec('Overnight data processing (Spark)');
+asm('A25','Nightly batch window, normal days','hours',6,'EOD files land from 22:00; reports due by 06:00','d1');
+asm('A26','Volume converted from full re-extract to CDC','%',0.5,'Lever 1: log-based change data capture','p');
+asm('A27','Incremental delta as share of a full extract','%',0.1,'','p');
+asm('A28b','Operational overhead on processing','%',0.1,'Metadata, compaction, snapshot expiry','p');
+asm('A29','Spark throughput per vCPU','MB/s',20,'Confirm in a proof of concept','d1');
+asm('A30','Memory per vCPU, Spark workers','GB',8,'','i');
+asm('A31','Month-end volume factor over a normal day','x',2,'','d1');
+asm('A31b','Batch window at month-end','hours',8,'','d1');
+asm('A32','Capacity headroom','%',0.3,'Growth and reruns; on-premises cannot burst','p');
+asm('A33','Minimum vCPU per concurrent job','vCPU',2,'Shared Spark sessions (Kyuubi or Spark Connect)','i');
+asm('A33b','Scheduler cap on simultaneous jobs','jobs',20,'Validate against scheduler logs','i');
+asm('A35','Spark worker VM size','vCPU',16,'','i');
+asm('A36','Spark worker VM memory','GB',128,'','i');
+sec('Reports, queries and live data feeds');
+asm('A37','Share of direct users querying at any moment','%',0.1,'','p');
+asm('A39','Share of reports run in the morning window','%',0.6,'','p');
+asm('A40','Morning report window','hours',4,'','d1');
+asm('A41','Average report query runtime','minutes',2,'','d1');
+asm('A42','Report load served from PostgreSQL marts','%',0.9,'','p');
+asm('A43','Average vCPU per lake query','vCPU',3,'','d1');
+asm('A44','Kafka broker VM size (memory is 8 GB per vCPU)','vCPU',4,'','i');
+asm('A45','Concurrent consumers as share of platform users','%',0.05,'','p');
+asm('A46','PostgreSQL sessions per vCPU','sessions',12,'','i');
+asm('A47','Gold held in PostgreSQL marts','%',0.2,'','p');
+asm('A48','PostgreSQL index and working-space overhead','x',1.5,'','d1');
+asm('A70','Streaming intra-day burst factor','x',5,'Peak over 24-hour average','d1');
+asm('A72','Sustained write throughput per Kafka broker','MB/s',60,'','i');
+asm('A73','Minimum Kafka brokers','count',3,'','i');
+asm('A74','PostgreSQL minimum vCPU','vCPU',16,'','i');
+asm('A75','PostgreSQL vCPU sizing step','vCPU',8,'','i');
+sec('Platform services');
+asm('A49','Service VM size','vCPU',16,'','i');
+asm('A50','Service VM memory','GB',64,'','i');
+asm('A51','Spare service VMs for HA','count',1,'N+1','i');
+asm('A51b','Streaming HA replicas (Connect workers, executors)','count',2,'4 vCPU / 16 GB each','i');
+asm('SCV','Services components demand (excl. Kafka Connect)','vCPU',52,'Governance, Airflow, Kyuubi, Superset, BIRT, APIs, identity, observability, catalogue','i');
+asm('SCG','Services components memory','GB',208,'','i');
+sec('Physical servers and test environments');
+asm('A52','vCPU (threads) per physical host','vCPU',160,'2 x 40-core CPUs; confirm the SKU','i');
+asm('A53','Memory per physical host','GB',1024,'','i');
+asm('A54','Usable share of host capacity','%',0.85,'System reserve and failure margin','p');
+asm('A55','Spare hosts in Production and DR','hosts',1,'N+1','i');
+asm('A58','UAT compute as share of Production','%',0.2,'Each pool rounds up to at least one VM','p');
+asm('A59','Dev compute as share of Production','%',0.2,'','p');
+sec('Network');
+asm('A63','Network peak factor over batch-window average','x',2,'','d1');
+asm('A64','Maximum link utilisation for design','%',0.7,'','p');
+asm('A66','Usable bandwidth per host','Gbps',25,'2 x 25 GbE active-passive','i');
+asm('A67','Storage traffic per byte processed (read + write)','x',2,'','d1');
+asm('A69','Network bytes per processed byte: shuffle','x',0.5,'','d1');
+asm('A65','Daily change replicated to DR, share of lake','%',0.1,'','p');
+asm('A76','Storage appliance front-end port speed','Gbps',25,'','i');
+asm('A77','Minimum front-end ports per appliance','ports',4,'Two per controller','i');
+sec('Environment factors',ENV);
+calc('SFAC','Storage factor vs Production','x',['1','1','{A15}','{A16}'],'','d2');
+calc('CFAC','Compute factor vs Production','x',['1','1','{A58}','{A59}'],'','d2');
+sh('Storage');
+const YC=[['Y0','Year 0'],['YN','Design year']];
+sec('Lakehouse capacity by year (TB)',YC);
+calc('GF','Growth factor','x',['1','POWER(1+{I03},{HOR})'],'(1 + growth) ^ years','d3');
+calc('BRZ','Bronze (raw, Parquet)','TB','{I01}*{A01}/{A02}*{GF@}','Allocated x usable share / compression, grown');
+calc('SIL','Silver','TB','{BRZ@}*{A06}','Bronze x A06');
+calc('GLD','Gold','TB','{BRZ@}*{A07}','Bronze x A07');
+calc('LAKE','Lakehouse zones incl. snapshots','TB','({BRZ@}+{SIL@}+{GLD@})*(1+{A08})','');
+calc('LAND','Landing zone','TB','{I02}/{A04}*{A05}*{GF@}','Daily volume / compression x retention days');
+calc('HOT','Hot share of Silver and Gold','%','1-({BRZ:Y0}/{BRZ@})*({A13}+{A14})','Only migrated history is older than 3 years','p');
+calc('KAF','Kafka broker storage, all replicas','TB','{I02}*{STR}*{A09}/{A12}*{A10}*{A11}*{GF@}','');
+calc('PROD','Production usable (lake + landing) x versioning','TB','({LAKE@}+{LAND@})*(1+{A17})','');
+calc('NVME','  of which NVMe tier (hot Silver + Gold)','TB','({SIL@}+{GLD@})*(1+{A08})*(1+{A17})*{HOT@}','');
+calc('NLS','  of which NL-SAS tier','TB','{PROD@}-{NVME@}','Landing, Bronze, warm and cold data');
+sec('By environment, design year',ENV);
+calc('EUSE','Usable object storage','TB','{PROD:YN}*{SFAC@}','');
+calc('ENVM','  NVMe tier usable','TB','{NVME:YN}*{SFAC@}','');
+calc('ENLS','  NL-SAS tier usable','TB','{EUSE@}-{ENVM@}','');
+calc('RAWN','Raw NVMe capacity','TB','{ENVM@}*{A19}/(1-{A20})','Usable x protection / (1 - reserve) / data reduction');
+calc('RAWL','Raw NL-SAS capacity','TB','{ENLS@}*{A19b}/(1-{A20})','');
+calc('RAWT','Raw capacity, total','TB','{RAWN@}+{RAWL@}','');
+calc('DRVN','NVMe drives (indicative)','drives','ROUNDUP({RAWN@}/{A21},0)','Vendor rounds up to its drive packs','i');
+calc('DRVL','NL-SAS drives (indicative)','drives','ROUNDUP({RAWL@}/{A22},0)','','i');
+calc('KAFS','Kafka broker local SSD, all replicas','TB','{KAF:YN}*{SFAC@}','');
+calc('PGS','PostgreSQL mart SSD per node','TB','{GLD:YN}*{A47}*{A48}*{SFAC@}','');
+sh('Compute');
+sec('Overnight data processing (Spark), Production');
+calc('EFF','Effective daily volume after CDC conversion','TB/day','{I02}*((1-{A26})+{A26}*{A27})','I02 x ((1 - A26) + A26 x A27)','d2');
+calc('PF','Processing factor per night','x','(1+{A06}+{A07})*(1+{A28b})','','d2');
+calc('PROC','Data processed per night','TB/day','{EFF}*{PF}','','d2');
+calc('SUST','Sustained vCPU across the batch window','vCPU','{PROC}*1000000/({A25}*3600)/{A29}','');
+calc('PKF','Effective peak factor at month-end','x','{A31}*{A25}/{A31b}','','d2');
+calc('PKV','Peak vCPU at month-end','vCPU','{SUST}*{PKF}','');
+calc('FLOOR','Concurrency floor','vCPU','{A33b}*{A33}','Capped jobs x vCPU per job');
+calc('NIGHT','Night batch design vCPU incl. headroom','vCPU','MAX({PKV},{FLOOR})*(1+{A32})','');
+calc('STRV','Always-on streaming executor vCPU','vCPU','{STR}*{A51b}*4','');
+calc('RPT','Scheduled report concurrency, morning window','queries','{I11}*{A39}/{A40}*{A41}/60','');
+calc('DAYV','Daytime lake query vCPU incl. headroom','vCPU','({DUS}*{A37}+{RPT}*(1-{A42}))*(1+{A32})*{A43}','');
+calc('POOLR','Spark pool VMs, calculated','VMs','ROUNDUP((MAX({NIGHT},{DAYV})+{STRV})/{A35},0)','Larger of night and day, plus streaming executors','i');
+calc('POOLV','Spark pool VMs installed','VMs','IF({OSV}>0,{OSV},{POOLR})','Your fixed value if entered, otherwise the calculated value','i');
+calc('POOLC','Installed Spark pool vCPU','vCPU','{POOLV}*{A35}','','i');
+calc('SLACK','Pool slack by day after queries and streaming','vCPU','{POOLC}-{DAYV}-{STRV}','Must stay at or above zero');
+calc('BT','Indicative batch time, normal night','hours','{PROC}*1000000/(({POOLC}-{STRV})*{A29})/3600','','d2');
+calc('BTM','Indicative batch time, month-end','hours','{BT}*{A31}','Compare with the month-end window','d2');
+sec('Live data feeds (Kafka)');
+calc('SVOL','Streaming volume per day','TB/day','{I02}*{STR}*{A09}','','d2');
+calc('SAVG','Average ingress','MB/s','{SVOL}*1000000/86400','');
+calc('SPEAK','Peak ingress','MB/s','{SAVG}*{A70}','');
+calc('BROK','Kafka brokers','brokers','IF({STR}<1,0,MAX({A73},ROUNDUP({SPEAK}*{A11}/{A72},0)))','','i');
+calc('CONW','Kafka Connect workers','workers','{STR}*{A51b}','4 vCPU / 16 GB each, run in the services pool','i');
+sec('Reporting database and platform services');
+calc('SESS','PostgreSQL concurrent sessions','sessions','{I09}*{A45}+{RPT}*{A42}','');
+calc('PGV','PostgreSQL primary vCPU','vCPU','ROUNDUP(MAX({A74},{SESS}/{A46})/{A75},0)*{A75}','','i');
+calc('SVV','Services vCPU demand incl. Kafka Connect','vCPU','{SCV}+{CONW}*4','');
+calc('SVG','Services memory demand incl. Kafka Connect','GB','{SCG}+{CONW}*16','');
+calc('SVM','Service VMs incl. HA spare','VMs','ROUNDUP(MAX({SVV}/{A49},{SVG}/{A50}),0)+{A51}','','i');
+sec('Network');
+calc('NETAVG','Average source-to-lake rate in batch window','Gbps','{I02}*8000000/({A25}*3600)/1000','','d2');
+calc('LAN','Design LAN throughput, sources to lake','Gbps','{NETAVG}*{A63}/{A64}','','d2');
+calc('DRREP','Daily change replicated to DR','TB/day','{LAKE:YN}*{A65}','','d2');
+calc('DRAVG','Average DR replication rate','Gbps','{DRREP}*8000000/86400/1000','','d2');
+calc('DRLINK','DR link design bandwidth','Gbps','{DRAVG}*{A63}/{A64}','','d2');
+calc('SPPR','Spark processed rate at month-end','MB/s','{PROC}*1000000/({A25}*3600)*{PKF}','');
+calc('HTRF','Host-side traffic at peak (Spark + ingest + Kafka)','Gbps','{SPPR}*({A67}+{A69})*8/1000*{A63}+{NETAVG}*{A63}+{SPEAK}*{A11}*8/1000','','d2');
+calc('FE','Storage front-end traffic at peak','Gbps','{SPPR}*{A67}*8/1000*{A63}+{NETAVG}*{A63}+{DRAVG}*{A63}','','d2');
+calc('FEP','Front-end ports required per appliance','ports','MAX({A77},ROUNDUP({FE}/{A64}/{A76},0))','','i');
+sh('BoM');
+sec('Logical VMs by environment',ENV);
+const T=id=>`IF({${id}:P}=0,0,MAX(1,ROUNDUP({${id}:P}*{CFAC@},0)))`;
+calc('VMS','Spark pool VMs','VMs',envs('{POOLV}',T('VMS')),'Worker VM per A35 / A36','i');
+calc('VMK','Kafka brokers','VMs',envs('{BROK}',T('VMK')),'Broker VM per A44','i');
+calc('VMV','Platform services pool VMs (data services)','VMs',envs('{SVM}*{SVC}',T('VMV')),'Service VM per A49 / A50','i');
+calc('VMP','PostgreSQL warehouse VMs (data services)','VMs',envs('2*{SVC}',T('VMP')),'HA pair','i');
+calc('VMM','Metadata PostgreSQL VMs (data services)','VMs',envs('2*{SVC}',T('VMM')),'HA pair, 4 vCPU / 32 GB','i');
+calc('VMT','Total logical VMs','VMs','{VMS@}+{VMK@}+{VMV@}+{VMP@}+{VMM@}','','i');
+calc('VCPU','vCPU demand','vCPU','{VMS@}*{A35}+{VMK@}*{A44}+{VMV@}*{A49}+({VMP@}*{PGV})+{VMM@}*4','','i');
+calc('MEM','Memory demand','GB','{VMS@}*{A36}+{VMK@}*{A44}*8+{VMV@}*{A50}+{VMP@}*{PGV}*{A30}+{VMM@}*32','','i');
+sec('Physical hosts',ENV);
+calc('HV','Hosts by vCPU','hosts','ROUNDUP({VCPU@}/({A52}*{A54}),0)','','i');
+calc('HM','Hosts by memory','hosts','ROUNDUP({MEM@}/({A53}*{A54}),0)','','i');
+calc('HOSTR','Physical hosts, calculated','hosts',['IF({VCPU@}=0,0,MAX({HV@},{HM@})+{A55})','IF({VCPU@}=0,0,MAX({HV@},{HM@})+{A55})','IF({VCPU@}=0,0,MAX({HV@},{HM@}))','IF({VCPU@}=0,0,MAX({HV@},{HM@}))'],'Larger of vCPU and memory, plus spare','i');
+calc('HOST','Physical hosts incl. spare','hosts',['IF({VCPU@}=0,0,IF({OHP}>0,{OHP},{HOSTR@}))','IF({VCPU@}=0,0,IF({OHR}>0,{OHR},{HOSTR@}))','IF({VCPU@}=0,0,IF({OHU}>0,{OHU},{HOSTR@}))','IF({VCPU@}=0,0,IF({OHD}>0,{OHD},{HOSTR@}))'],'Your fixed value if entered, otherwise the calculated value','i');
+calc('UTIL','vCPU utilisation of survivors if one host fails','%',['{VCPU@}/(MAX(1,{HOST@}-1)*{A52}*{A54})','{VCPU@}/(MAX(1,{HOST@}-1)*{A52}*{A54})','0','0'],'UAT and Dev run on a single host','p');
+sec('Storage hardware by environment (design year)',ENV);
+calc('BU','Usable storage','TB','{EUSE@}','','d1');
+calc('BRN','Raw NVMe capacity','TB','{RAWN@}','','d1');
+calc('BRL','Raw NL-SAS capacity','TB','{RAWL@}','','d1');
+calc('BDN','NVMe drives (approx.)','drives','{DRVN@}','','i');
+calc('BDL','NL-SAS drives (approx.)','drives','{DRVL@}','','i');
+calc('BKS','Live-feed server disks (SSD)','TB','{KAFS@}','Zero when live data feeds are not needed','d1');
+calc('BPG','Reporting database disks (SSD, per node)','TB','{PGS@}*{SVC}','Zero when data services are not included','d1');
+sec('Selected scope totals (environments flagged in Inputs)');
+calc('TVM','Total logical VMs','VMs','{VMT#}','','i');
+calc('TVCPU','Total vCPU','vCPU','{VCPU#}','','i');
+calc('TMEM','Total memory','GB','{MEM#}','','i');
+calc('THOST','Physical hosts','hosts','{HOST#}','','i');
+calc('TUSE','Usable object storage, design year','TB','{EUSE#}','','d1');
+calc('TRAW','Raw capacity, design year','TB','{RAWT#}','','d1');
+calc('TDRN','NVMe drives (indicative)','drives','{DRVN#}','','i');
+calc('TDRL','NL-SAS drives (indicative)','drives','{DRVL#}','','i');
+sh('Summary');
+sec('Scope of this sizing');
+calc('CLUS','Cluster type','','IF({SVC}=1,"Base cluster + data services","Base cluster")','Base = object storage, Spark pool, Kafka brokers. Data services add the platform services pool and PostgreSQL pairs');
+calc('SCOPE','Environments','','CONCATENATE(IF({SP}=1,"Production ",""),IF({SU}=1,"UAT ",""),IF({SD}=1,"Development ",""),IF({ENVF:R}=1,"+ DR",""))','');
+sec('Recommended sizing for the selected scope');
+calc('S1','Total vCPU','vCPU','{TVCPU}','Sum of VM vCPU in scope','i');
+calc('S2','Total memory','GB','{TMEM}','','i');
+calc('S3','Physical hosts','hosts','{THOST}','Incl. spare hosts','i');
+calc('S4','Usable object storage','TB','{TUSE}','','d1');
+calc('S5','Raw capacity','TB','{TRAW}','','d1');
+calc('S6','NVMe drives (indicative)','drives','{TDRN}','','i');
+calc('S7','NL-SAS drives (indicative)','drives','{TDRL}','','i');
+calc('HSPEC','Host specification','','CONCATENATE("2U, ",{A52}," threads, ",{A53}," GB RAM, ",{A66}," Gbps usable network")','');
+calc('DRTXT','DR replication link','','IF({DRLINK}<=7,"2 x 10 Gbps (diverse paths)","2 x 100 Gbps or 10 Gbps LAG")','');
+calc('FETXT','Storage front-end','','CONCATENATE("At least ",{FEP}," x ",{A76}," GbE ports per appliance")','');
+sec('Checks');
+calc('HPH','Peak traffic per working Production host','Gbps','{HTRF}/MAX(1,{HOST:P}-{A55})','','d2');
+calc('CK2','Month-end batch time within window','','IF({BTM}<={A31b},"OK","Batch exceeds window: add Spark VMs")','');
+calc('CK3','Spark pool has daytime slack','','IF({SLACK}>=0,"OK","Pool too small for day load")','');
+calc('CK4','Host network sufficient','','IF({HPH}/{A66}<={A64},"OK","Increase bandwidth per host (A66)")','');
+calc('CK6','Fixed host counts cover the VM demand','','IF(MIN(({HOST:P}-{HOSTR:P})*{ENVF:P},({HOST:R}-{HOSTR:R})*{ENVF:R},({HOST:U}-{HOSTR:U})*{ENVF:U},({HOST:D}-{HOSTR:D})*{ENVF:D})>=0,"OK","A fixed host count is below the calculated need")','');
+calc('CK5','Survivors can carry load after a host failure','','IF({UTIL:P}<=1,"OK","Add a host to Production")','');
+
+const INFO={"OSV": "Optional. Enter a number to fix the Production Spark pool VM count; UAT, Dev and DR follow it using their compute shares. Leave 0 to use the calculated value.", "OHP": "Optional. Enter a number to fix the Production physical server count, including spare. Leave 0 for the calculated value.", "OHR": "Optional. Enter a number to fix the DR physical server count, including spare. Leave 0 for the calculated value.", "OHU": "Optional. Enter a number to fix the UAT physical server count. Leave 0 for the calculated value.", "OHD": "Optional. Enter a number to fix the Development physical server count. Leave 0 for the calculated value.", "I01": "The total size of the databases you want to move into the lakehouse, including indexes and free space. Example: 150 TB.", "I02": "How much data your systems send into the platform each day, counting full reloads, not only new records. Example: 5 TB per day.", "I03": "How fast your data grows each year. Example: 30% means 100 TB becomes 130 TB after a year.", "HOR": "How many years the hardware must last. The servers and storage are sized for the end of this year. Example: 3 years.", "I09": "Everyone who will open reports or dashboards, including occasional users. Example: 4,000 people.", "DUS": "People who write their own queries on the data, such as analysts and data scientists. Example: 50 people.", "I11": "Reports that run automatically each day, including regulatory and management reports. Example: 3,000 reports.", "STR": "Choose Yes if data must reach the platform within seconds (for example card or UPI transactions). Choose No for overnight loads only; this removes the live-feed servers.", "DR": "Choose Yes if a second site must keep a copy and take over if the main site fails. The DR site is the same size as Production.", "A01": "Share of the allocated source size that is real data. The rest is indexes, undo, temp and free space.", "A02": "How much smaller the data becomes when stored as compressed Parquet. Higher means less storage.", "A04": "Compression achieved on raw landing files such as CSV or text.", "A05": "Days raw landing files are kept so loads can be replayed.", "A06": "Size of the cleansed (Silver) layer relative to the raw (Bronze) layer.", "A07": "Size of the business-ready (Gold) layer relative to the raw (Bronze) layer.", "A08": "Extra space for table snapshots kept for audit and rollback.", "A09": "Share of the daily volume that arrives as real-time streams. Used only when streaming is needed.", "A10": "Days of events Kafka keeps so consumers can replay after an outage.", "A11": "Copies of each Kafka message kept across brokers for durability.", "A12": "Compression applied to Kafka messages. Higher means less broker storage.", "A13": "Share of migrated history older than 3 years that can move to the cheaper capacity tier.", "A14": "Share of migrated history older than 5 years that can move to the cheaper capacity tier.", "A15": "UAT data volume as a share of Production, usually a masked sample.", "A16": "Development data volume as a share of Production.", "A17": "Extra space for object versioning and backups.", "A19": "Raw-to-usable multiplier of the fast NVMe tier for data protection. Replace with the storage vendor figure.", "A19b": "Raw-to-usable multiplier of the capacity NL-SAS tier for data protection. Replace with the vendor figure.", "A20": "Free space kept on each tier because storage performs best when under about 80% full.", "A21": "Capacity of one NVMe drive. Used only to estimate the drive count.", "A22": "Capacity of one NL-SAS drive. Used only to estimate the drive count.", "A25": "Hours available each night for batch processing before reports are due.", "A26": "Share of the daily volume moved with change data capture instead of full re-extracts.", "A27": "Size of a daily change set as a share of a full extract.", "A28b": "Extra processing for metadata, compaction and snapshot clean-up.", "A29": "Data one Spark vCPU processes per second. Confirm in a proof of concept.", "A30": "Memory allocated per Spark vCPU.", "A31": "How much heavier a month-end day is than a normal day.", "A31b": "Hours allowed for batch processing at month-end.", "A32": "Spare capacity for growth and reruns, because on-premises hardware cannot burst.", "A33": "Minimum vCPU each concurrent batch job needs.", "A33b": "Maximum jobs the scheduler runs at the same time.", "A35": "vCPU in each Spark worker virtual machine.", "A36": "Memory in each Spark worker virtual machine.", "A37": "Share of direct lake users who run a query at the same moment.", "A39": "Share of daily reports that run in the morning window.", "A40": "Length of the morning report window.", "A41": "Average runtime of a report query.", "A42": "Share of report load served from PostgreSQL marts rather than the lake.", "A43": "Average vCPU a lake query uses.", "A44": "vCPU in each Kafka broker VM. Memory is 8 GB per vCPU.", "A45": "Share of platform users with an open database connection at any time.", "A46": "Concurrent database sessions one PostgreSQL vCPU can carry.", "A47": "Share of Gold data copied into PostgreSQL marts for fast reporting.", "A48": "Extra PostgreSQL space for indexes and working files.", "A70": "How much higher the real-time peak is than the 24-hour average.", "A72": "Sustained write rate one Kafka broker can take.", "A73": "Fewest Kafka brokers allowed, for high availability.", "A74": "Smallest PostgreSQL server size.", "A75": "PostgreSQL size is rounded up in steps of this many vCPU.", "A49": "vCPU in each platform service VM.", "A50": "Memory in each platform service VM.", "A51": "Extra service VM kept as a spare for high availability.", "A51b": "Replicas of Kafka Connect workers and streaming executors, for availability.", "SCV": "Total vCPU the platform services need (governance, Airflow, Kyuubi, Superset, BIRT, APIs, identity, observability, catalogue).", "SCG": "Total memory the platform services need.", "A52": "Processor threads in each physical server.", "A53": "Memory in each physical server.", "A54": "Share of server capacity planned for use, leaving a reserve.", "A55": "Extra servers in Production and DR so one can fail without an outage.", "A58": "UAT compute as a share of Production. Each pool still gets at least one VM.", "A59": "Development compute as a share of Production.", "A63": "How much higher peak network traffic is than the batch-window average.", "A64": "Highest link utilisation allowed in the design.", "A66": "Usable network bandwidth of each physical server.", "A67": "Network data read plus written for each byte the data-processing servers handle.", "A69": "Network data shuffled between workers for each byte processed.", "A65": "Share of the lake that changes daily and must be replicated to DR.", "A76": "Speed of each storage appliance front-end port.", "A77": "Fewest front-end ports per storage appliance."};
+rows.forEach(r=>{if(INFO[r.id])r.info=INFO[r.id]});
+
+const LABEL={"I01": "Size of the data to migrate", "I02": "Data moved every day", "I03": "Yearly data growth", "HOR": "Years to plan for", "I09": "All report and dashboard users", "DUS": "Users who run their own queries", "I11": "Scheduled reports per day", "STR": "Live (real-time) data feeds needed?", "DR": "Disaster recovery site needed?", "OSV": "Data processing servers (Spark VMs), Production", "OHP": "Physical servers, Production", "OHR": "Physical servers, DR", "OHU": "Physical servers, UAT", "OHD": "Physical servers, Development", "VMS": "Data processing servers (Spark VMs)", "VMK": "Live-feed servers (Kafka brokers)", "VMV": "Platform services servers (data services)", "VMP": "Reporting database servers (PostgreSQL)", "VMM": "Metadata database servers (PostgreSQL)", "VMT": "Total virtual machines", "VCPU": "Total vCPU (virtual processors)", "MEM": "Total memory (GB)", "HOST": "Physical servers needed (incl. spare)", "HOSTR": "Physical servers, calculated", "EUSE": "Usable storage", "ENVM": "Fast tier (NVMe flash)", "ENLS": "Capacity tier (NL-SAS disks)", "RAWT": "Raw storage to buy", "DRVN": "NVMe drives (approx.)", "DRVL": "NL-SAS drives (approx.)", "KAFS": "Live-feed server disks (SSD)", "PGS": "Reporting database disks (SSD, per node)", "POOLR": "Data processing servers (Spark VMs), calculated", "POOLV": "Data processing servers (Spark VMs), used", "HTRF": "Server network traffic at peak", "FE": "Storage network traffic at peak", "FEP": "Storage network ports needed"};
+rows.forEach(r=>{if(LABEL[r.id])r.label=LABEL[r.id]});
+
+const GLOSSARY=[["Virtual machine (VM)", "A software server. Several VMs share one physical server."], ["vCPU", "A virtual processor core given to a VM."], ["Physical server (host)", "The hardware machine that runs the VMs. Includes a spare so one can fail without an outage."], ["Spark", "The engine that processes large volumes of data in parallel, for overnight loads and for queries."], ["Kafka", "A real-time messaging system that carries live data into the platform."], ["PostgreSQL", "A database that serves fast reports and also stores the platform's own metadata."], ["Base cluster", "Object storage, the Spark data-processing servers and the Kafka live-feed servers."], ["Data services", "Add-on services: the platform services pool (governance, scheduling, reporting tools, APIs, security) and the PostgreSQL databases."], ["Production, UAT, Development", "Live environment, user-acceptance testing environment, and developer environment. UAT and Development are smaller copies."], ["DR (disaster recovery)", "A second site that keeps a copy of Production and can take over."], ["Usable and raw storage", "Usable is the space the data occupies. Raw is the disk capacity to buy after data protection and free space."], ["NVMe and NL-SAS", "NVMe is fast flash storage for frequently used data. NL-SAS is high-capacity disk for the rest."], ["Bronze, Silver, Gold", "Three data layers: raw copy, cleansed data, and business-ready data."], ["Change data capture (CDC)", "Moving only the records that changed instead of reloading everything."], ["Spare server", "An extra server so that one failure does not stop the platform."]];
+
+/*ENGINE*/
+const FN={ROUNDUP:x=>Math.ceil(+(+x).toFixed(9)),MAX:Math.max,MIN:Math.min,POWER:Math.pow,IF:(c,a,b)=>c?a:b,CONCATENATE:(...a)=>a.join('')};
+const FNK=Object.keys(FN);
+const expand=f=>f.replace(/\{(\w+)#\}/g,(m,id)=>'('+ENV.map(e=>`{${id}:${e[0]}}*{ENVF:${e[0]}}`).join('+')+')');
+const keyOf=(id,s,k)=>s==='@'?k:s?s.slice(1):ROWS[id].keys[0];
+const tok=/\{(\w+)(@|:\w+)?\}/g;
+function makeEngine(){
+  const cells={};
+  rows.forEach(r=>{if(r.sec)return;r.keys.forEach((k,i)=>{
+    if(r.kind==='calc'){const f=Array.isArray(r.f)?r.f[i]:r.f;
+      const js=expand(f).replace(/(?<![<>])=/g,'===').replace(/<===/g,'<=').replace(/>===/g,'>=').replace(tok,(m,id,s)=>`v('${id}','${keyOf(id,s,k)}')`);
+      cells[r.id+'|'+k]=new Function('v',...FNK,'return '+js);}
+  })});
+  let memo={},OV={};
+  const v=(id,k)=>{const key=id+'|'+k;if(key in memo)return memo[key];
+    const c=cells[key];let x;
+    if(c)x=c(v,...FNK.map(n=>FN[n]));else{x=id in OV?OV[id]:ROWS[id].val}
+    return memo[key]=x};
+  return {get:(id,k)=>v(id,k||ROWS[id].keys[0]),set:o=>{OV=o;memo={}},ov:()=>OV};
+}
+
+/*EXPORT*/
+const NF={i:'#,##0',d1:'#,##0.0',d2:'#,##0.00',d3:'0.000',p:'0.0%'};
+const col=i=>String.fromCharCode(67+i);
+function layoutRows(){const addr={},cnt={};
+  rows.forEach(r=>{const s=r.sheet;cnt[s]=(cnt[s]||3)+(r.sec&&cnt[s]>3?2:1);r._row=cnt[s];
+    if(!r.sec)addr[r.id]={sheet:s,row:r._row,cols:Object.fromEntries(r.keys.map((k,i)=>[k,col(i)]))}});
+  return addr}
+function xlFormula(f,from,key,addr){
+  return expand(f).replace(tok,(m,id,s)=>{const a=addr[id],k=keyOf(id,s,key);
+    return (a.sheet===from?'':a.sheet+'!')+'$'+a.cols[k]+'$'+a.row})}
+async function buildWorkbook(ExcelJS,E,meta){
+  const addr=layoutRows(),wb=new ExcelJS.Workbook();wb.calcProperties={fullCalcOnLoad:true};
+  const order=['Summary','Inputs','Assumptions','Storage','Compute','BoM'],ws={};
+  const titles={Summary:'Recommended sizing',Inputs:'Client inputs and scope',Assumptions:'Engineering assumptions',Storage:'Storage sizing (decimal TB)',Compute:'Compute, streaming, serving and network (Production)',BoM:'Bill of materials by environment'};
+  const F='Arial',purple='FF3D145F';
+  order.forEach(n=>{const w=wb.addWorksheet(n);ws[n]=w;
+    [8,58,14,14,14,14,16,80].forEach((x,i)=>w.getColumn(i+1).width=x);
+    w.getCell('A1').value=(n==='Summary'?(meta.client||'Client')+' | ':'')+titles[n];w.getCell('A1').font={name:F,size:14,bold:true,color:{argb:purple}};
+    w.getCell('A2').value=n==='Summary'?'Prepared by Translab Technologies | '+meta.date+' | Planning figures from the Tantor lakehouse sizing model; confirm with a proof of concept':'Blue = client input. Blue on yellow = Translab assumption (edit it and the workbook recalculates). Black = formula. Green = link to another sheet.';
+    w.getCell('A2').font={name:F,size:9,italic:true,color:{argb:'FF595959'}}});
+  const gs=wb.addWorksheet('Glossary');gs.getColumn(1).width=32;gs.getColumn(2).width=110;
+  gs.getCell('A1').value='Glossary';gs.getCell('A1').font={name:F,size:14,bold:true,color:{argb:purple}};
+  GLOSSARY.forEach((x,i)=>{gs.getCell(3+i,1).value=x[0];gs.getCell(3+i,1).font={name:F,size:10,bold:true};gs.getCell(3+i,2).value=x[1];gs.getCell(3+i,2).font={name:F,size:10}});
+  rows.forEach(r=>{const w=ws[r.sheet],R=r._row;
+    if(r.sec){for(let c=1;c<=8;c++){const x=w.getCell(R,c);x.fill={type:'pattern',pattern:'solid',fgColor:{argb:purple}};x.font={name:F,size:10,bold:true,color:{argb:'FFFFFFFF'}}}
+      w.getCell(R,1).value=r.title;r.cols.forEach((c,i)=>{if(c[1])w.getCell(R,3+i).value=c[1]});w.getCell(R,7).value='Unit';w.getCell(R,8).value='Basis';return}
+    w.getCell(R,1).value=r.id;w.getCell(R,2).value=r.label;w.getCell(R,7).value=r.unit;w.getCell(R,8).value=r.note||'';
+    [1,2,7,8].forEach(c=>w.getCell(R,c).font={name:F,size:10,color:{argb:c===1?'FF595959':'FF000000'}});
+    r.keys.forEach((k,i)=>{const x=w.getCell(R,3+i),val=E.get(r.id,k);x.numFmt=NF[r.n]||'General';x.alignment={horizontal:'right'};
+      if(r.kind==='calc'){const f=xlFormula(Array.isArray(r.f)?r.f[i]:r.f,r.sheet,k,addr);
+        x.value={formula:f,result:val};
+        x.font={name:F,size:10,color:{argb:/^(\w+!)?\$[A-Z]+\$\d+$/.test(f)&&f.includes('!')?'FF008000':'FF000000'}}}
+      else{x.value=val;x.font={name:F,size:10,color:{argb:'FF0000FF'}};
+        if(r.kind==='as')x.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFFF00'}}}
+      if(typeof val==='string')x.alignment={horizontal:'left'}})});
+  return wb}
+
+/*UI*/
+const $=s=>document.querySelector(s),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const E=makeEngine(),STORE='lakehouse-sizing-v1';
+let OV={},scope={env:'all',svc:1},client='',page='inputs';
+const PAGES=['inputs','assumptions','storage','compute','review','bom'];
+const fmt=(x,n)=>typeof x!=='number'?x:n==='p'?(x*100).toFixed(1)+'%':x.toLocaleString('en-US',{maximumFractionDigits:{i:0,d1:1,d2:2,d3:3}[n]??1,minimumFractionDigits:{d1:1,d2:2,d3:3}[n]||0});
+const g=(id,k)=>E.get(id,k);
+function apply(){OV.SP=scope.env==='all'||scope.env==='P'?1:0;OV.SU=scope.env==='all'||scope.env==='U'?1:0;OV.SD=scope.env==='all'||scope.env==='D'?1:0;OV.SVC=scope.svc;E.set(OV)}
+function save(){try{localStorage.setItem(STORE,JSON.stringify({OV,scope,client,page}))}catch(e){}}
+function load(){try{const s=JSON.parse(localStorage.getItem(STORE)||'null');if(s){OV=s.OV||{};scope=s.scope||scope;client=s.client||'';page=s.page||page}}catch(e){}}
+const LIM={I01:[1,1e6],I02:[.01,5e3],I03:[0,2],HOR:[1,10],I09:[1,1e7],DUS:[1,1e6],I11:[0,1e6],OSV:[0,5e3],OHP:[0,5e3],OHR:[0,5e3],OHU:[0,5e3],OHD:[0,5e3],A20:[0,.9]};
+const ZERO=['A55','A51','A51b'];
+function limit(r){if(LIM[r.id])return LIM[r.id];if(r.n==='p')return[0,1];return[ZERO.includes(r.id)?0:1e-9,1e9]}
+const SCOPEIDS=['SP','SU','SD','SVC'],OVRIDS=['OSV','OHP','OHR','OHU','OHD'];
+const tip=t=>`<span class="i" tabindex="0" role="img" aria-label="${esc(t)}" data-tip="${esc(t)}">i</span>`;
+function field(r){const val=r.id in OV?OV[r.id]:r.val,flag=/^1 =/.test(r.unit),id='p_'+r.id;
+  const ctl=flag?`<select id="${id}" data-id="${r.id}"><option value="1"${val==1?' selected':''}>Yes</option><option value="0"${val==0?' selected':''}>No</option></select>`
+   :`<input id="${id}" type="number" step="any" inputmode="decimal" data-id="${r.id}" data-p="${r.n==='p'?1:0}" value="${r.n==='p'?+(val*100).toFixed(6):val}">`;
+  return `<div class="f"><div class="top"><label class="lb" for="${id}">${esc(r.label)}</label>${r.kind==='as'?`<span class="code">${r.id}</span>`:''}${tip(r.info||r.note||r.label)}</div><span class="ctl">${ctl}<em>${r.n==='p'?'%':flag?'':esc(r.unit)}</em></span><small class="err" hidden></small></div>`}
+function buildForms(){
+  const GR=[['Your data','How much data you have and how long the platform must last.',['I01','I02','I03','HOR']],['Your users and reports','Who uses the platform and how many reports run.',['I09','DUS','I11']],['Live data and protection','Whether data arrives live and whether a disaster recovery site is needed.',['STR','DR']]];
+  $('#inputs').innerHTML=GR.map(x=>`<div class="grp"><h3>${x[0]}</h3><p class="note">${x[1]}</p><div class="grid">${x[2].map(i=>field(ROWS[i])).join('')}</div></div>`).join('');
+  $('#ovr').innerHTML=OVRIDS.map(i=>field(ROWS[i])).join('');
+  let h='',open=false;rows.filter(r=>r.sheet==='Assumptions').forEach(r=>{
+    if(r.sec){if(open)h+='</div></section>';open=r.cols.length===1;if(open)h+=`<section class="panel"><h2>${esc(r.title)}</h2><div class="grid3">`}
+    else if(r.kind==='as'&&open)h+=field(r)});
+  $('#assume').innerHTML=h+(open?'</div></section>':'')}
+const flagged=()=>ENV.map(e=>e[0]).filter(k=>g('ENVF',k)===1);
+function table(head,body){return `<div class="sc"><table><thead><tr><th></th>${head.map(h=>`<th class="n">${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`}
+function line(label,vals,tot,n,cls){return `<tr class="${cls||''}"><td>${label}</td>${vals.map(v=>`<td class="n">${fmt(v,n)}</td>`).join('')}${tot===null?'':`<td class="n tot">${fmt(tot,n)}</td>`}</tr>`}
+const ADD=['TB','drives','VMs','vCPU','GB','hosts'];
+function sheetHTML(name){
+  const ks=flagged();let out='',cur=null;const flush=()=>{if(cur)out+=cur.h+'</tbody></table></div></section>'};
+  rows.filter(r=>r.sheet===name).forEach(r=>{
+    if(r.sec){flush();const env=r.cols.length===4,ck=env?r.cols.filter(c=>ks.includes(c[0])):r.cols,multi=env&&ck.length>1;
+      cur={ck,multi,h:`<section class="panel"><h2>${esc(r.title)}</h2><div class="sc"><table><thead><tr><th>Item</th>${ck.map(c=>`<th class="n">${c[1]||'Value'}</th>`).join('')}${multi?'<th class="n">Total</th>':''}<th>Unit</th><th>How it is worked out</th></tr></thead><tbody>`};return}
+    const vals=cur.ck.map(c=>g(r.id,c[0])),tot=cur.multi&&ADD.includes(r.unit)?fmt(vals.reduce((a,b)=>a+b,0),r.n):'';
+    cur.h+=`<tr><td>${esc(r.label.trim())}</td>${vals.map(v=>`<td class="n">${fmt(v,r.n)}</td>`).join('')}${cur.multi?`<td class="n tot">${tot}</td>`:''}<td class="mut">${esc(r.unit)}</td><td class="basis">${esc(r.note||'')}</td></tr>`});
+  flush();return out}
+function show(p,noScroll){if(!PAGES.includes(p))p='inputs';page=p;
+  PAGES.forEach(x=>{$('#pg-'+x).hidden=x!==p;$('[data-page='+x+']').setAttribute('aria-selected',String(x===p))});
+  try{history.replaceState(null,'','#'+p)}catch(e){}if(!noScroll)window.scrollTo(0,0);save()}
+function render(){
+  const ks=flagged(),names=ks.map(k=>ENV.find(e=>e[0]===k)[1]),multi=ks.length>1,head=multi?[...names,'Total']:names;
+  const row=(id,n,cls,skip0)=>{const v=ks.map(k=>g(id,k));if(skip0&&v.every(x=>!x))return'';return line(ROWS[id].label.trim(),v,multi?v.reduce((a,b)=>a+b,0):null,n||ROWS[id].n,cls)};
+  const cards=[['Processing power',g('TVCPU'),'i','vCPU (virtual processors)','Total virtual CPUs for all virtual machines in the selected scope.'],['Memory',g('TMEM'),'i','GB','Total memory for all virtual machines in the selected scope.'],['Physical servers',g('THOST'),'i','including spare servers','Servers needed to run the virtual machines, plus a spare so one can fail without an outage.'],['Usable storage',g('TUSE'),'d1','TB at year '+g('HOR'),'Object storage the data occupies at the end of the planning horizon.'],['Raw storage',g('TRAW'),'d1','TB installed','Disk capacity to buy after data protection and free-space reserve.']];
+  $('#rec').textContent='For '+(client||'your organisation')+', we recommend '+fmt(g('THOST'),'i')+' physical server'+(g('THOST')===1?'':'s')+' ('+fmt(g('TVCPU'),'i')+' vCPU and '+fmt(g('TMEM')/1024,'d1')+' TB of memory) with '+fmt(g('TUSE'),'d1')+' TB of usable storage ('+fmt(g('TRAW'),'d1')+' TB raw), sized for year '+g('HOR')+'.';
+  $('#cards').innerHTML=cards.map(c=>`<div class="card"><div class="top"><span>${c[0]}</span>${tip(c[4])}</div><b>${fmt(c[1],c[2])}</b><small>${c[3]}</small></div>`).join('');
+  $('#scopeLine').textContent=g('CLUS')+' · '+g('SCOPE').trim();
+  $('#compute').innerHTML=table(head,row('VMS')+row('VMK',0,'',1)+row('VMV',0,'',1)+row('VMP',0,'',1)+row('VMM',0,'',1)+row('VMT',0,'sub')+row('VCPU',0,'sub')+row('MEM',0,'sub')+row('HOST',0,'sub')+(OVRIDS.slice(1).some(i=>OV[i]>0)?row('HOSTR'):''));
+  $('#ovnote').textContent=OV.OSV>0?'Spark pool fixed at '+OV.OSV+' VMs in Production (calculated need: '+g('POOLR')+'). UAT, Dev and DR follow the fixed value.':'';
+  $('#storage').innerHTML=table(head,row('EUSE')+row('ENVM')+row('ENLS')+row('RAWT',0,'sub')+row('DRVN')+row('DRVL')+row('KAFS',0,'',1)+(scope.svc?row('PGS'):''));
+  const sp=[['Production usable storage, go-live to year '+g('HOR'),fmt(g('PROD','Y0'),'d1')+' TB to '+fmt(g('PROD','YN'),'d1')+' TB'],['Physical server specification',g('HSPEC')],['DR replication link',ks.includes('R')?g('DRTXT')+' ('+fmt(g('DRLINK'),'d1')+' Gbps design)':'Not in scope'],['Storage front-end',g('FETXT')],['Overnight processing time, normal night / month-end',fmt(g('BT'),'d1')+' h / '+fmt(g('BTM'),'d1')+' h'],['Live-feed (Kafka) servers per site',g('BROK')+(g('BROK')?'':' (batch only)')]];
+  $('#spec').innerHTML=sp.map(s=>`<div><span>${s[0]}</span><b>${esc(s[1])}</b></div>`).join('');
+  $('#checks').innerHTML=['CK2','CK3','CK4','CK5','CK6'].map(i=>{const ok=g(i)==='OK';return `<li class="${ok?'ok':'warn'}"><i>${ok?'✓':'!'}</i>${esc(ROWS[i].label)}${ok?'':': <b>'+esc(g(i))+'</b>'}</li>`}).join('');
+  document.querySelectorAll('[data-scope]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.scope===(b.dataset.kind==='env'?scope.env:String(scope.svc)))));
+  $('#svcNote').textContent=scope.svc?'Adds the platform services pool (governance, Airflow, Kyuubi, Superset, BIRT, APIs, identity, observability, catalogue, Kafka Connect) and both PostgreSQL HA pairs.':'Object storage, Spark pool and Kafka brokers only. No platform services or PostgreSQL VMs.';
+  document.querySelectorAll('.f').forEach(l=>{const i=l.querySelector('[data-id]'),id=i.dataset.id;l.classList.toggle('chg',id in OV&&OV[id]!==ROWS[id].val)});
+  $('#storageBody').innerHTML=sheetHTML('Storage');$('#computeBody').innerHTML=sheetHTML('Compute');$('#bomBody').innerHTML=sheetHTML('BoM');$('#ovnote2').textContent=$('#ovnote').textContent;
+  save()}
+async function download(){
+  const btn=$('#dl'),msg=$('#msg');btn.disabled=true;msg.textContent='Building workbook…';
+  try{const d=new Date(),meta={client:client||'Client',date:d.toISOString().slice(0,10)};
+    const wb=await buildWorkbook(ExcelJS,E,meta),buf=await wb.xlsx.writeBuffer(),
+      blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),
+      name='Lakehouse_Sizing_'+(client||'Client').replace(/[^\w-]+/g,'_')+'_'+meta.date+'.xlsx';
+    const dl=window.claude&&window.claude.use?await window.claude.use('downloads'):null;
+    if(dl){await dl.save({filename:name,data:blob});msg.textContent='Saved '+name}
+    else{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();msg.textContent='Downloaded '+name}
+  }catch(e){msg.textContent=e&&e.code==='declined'?'Download cancelled.':'Could not create the workbook'+(e&&e.message?': '+e.message:'.')}
+  btn.disabled=false}
+function init(){
+  load();apply();buildForms();render();$('#gloss').innerHTML=GLOSSARY.map(x=>`<dt>${esc(x[0])}</dt><dd>${esc(x[1])}</dd>`).join('');
+  $('#client').value=client;$('#client').addEventListener('input',e=>{client=e.target.value;render()});
+  document.querySelectorAll('[data-scope]').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.kind==='env')scope.env=b.dataset.scope;else scope.svc=+b.dataset.scope;apply();render()}));
+  document.addEventListener('change',e=>{const t=e.target,id=t.dataset&&t.dataset.id;if(!id)return;let x=parseFloat(t.value);if(isNaN(x))return;if(t.dataset.p==='1')x=x/100;const r=ROWS[id],L=limit(r),er=t.closest('.f').querySelector('.err');if(x<L[0]-1e-12||x>L[1]+1e-12){er.hidden=false;er.textContent='Please enter a value between '+(r.n==='p'?L[0]*100+'% and '+L[1]*100+'%':L[0]<1&&L[0]>0?'0.01 and '+L[1]:Math.ceil(L[0])+' and '+L[1].toLocaleString('en-US'));t.setAttribute('aria-invalid','true');return}er.hidden=true;t.removeAttribute('aria-invalid');OV[id]=x;apply();render()});
+  $('#reset').addEventListener('click',()=>{OV={};buildForms();apply();render()});
+  $('#dl').addEventListener('click',download);$('#dl2').addEventListener('click',download);
+  document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.page)));
+  document.querySelectorAll('[data-go]').forEach(b=>b.addEventListener('click',()=>show(b.dataset.go)));
+  show((location.hash||'').slice(1)||page,true)}
+
+init();
+</script></body></html>
